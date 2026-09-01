@@ -55,7 +55,38 @@ console.log(adminValue); // Output: { firstName: 'Bob', role: 'Admin' }
 // 2. The return value `userValue` and `adminValue` will be of the same type as the input parameter, thus we can access the properties by using dot notation without any type errors. For example, we can access `userValue.name` and `adminValue.firstName` without any issues.
 
 
-// Example 2: Generic class to perform operations on numbers and strings
+// Example 2: Generic interface
+interface Box<T> {
+    content: T;
+}
+
+const stringBox: Box<string> = { content: "Hello, Generics!" };
+const numberBox: Box<number> = { content: 42 };
+
+console.log(stringBox.content); // Output: Hello, Generics!
+console.log(numberBox.content); // Output: 42
+
+// other
+interface ApiPromise<T> {
+    status: number;
+    data: T;
+}
+
+const userApiResponse: ApiPromise<{ name: string; age: number }> = {
+    status: 200,
+    data: {
+        name: "Alice",
+        age: 25
+    }
+};
+
+// Note:
+// 1. The generic interface `Box<T>` allows us to create boxes that can hold different types of content (string or number in this case) while maintaining type safety.
+// 2. When creating instances of the `Box` interface, we specify the type argument (e.g., string or number) in angle brackets, which determines the type of the `content` property.
+// 3. The `ApiPromise<T>` interface demonstrates how generics can be used in more complex scenarios, such as API responses, where the data type can vary based on the specific API endpoint being called. Here we have defined the `data` property to be of type `T`, allowing us to specify the expected data structure (here its object, it can be any type) when creating instances of the `ApiPromise` interface.
+
+
+// Example 3: Generic class to perform operations on numbers and strings
 // class GenericNumber<T> {
 //     zeroValue: T;
 //     add: (x: T, y: T) => T;
