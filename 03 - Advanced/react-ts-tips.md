@@ -466,6 +466,67 @@ function useMyHook() {
   function useMyHook(): [number, Dispatch<SetStateAction<number>>] { ... }
   ```
 
+### Custom Hook Example For Data Fetching using Generics
+```typescript
+// 1. Define the shape of our state using a generic interface
+interface FetchState<T> {
+  data: T | null;
+  loading: boolean;
+  error: string | null;
+}
+
+// 2. Define the generic custom hook
+export function useFetch<T>(url: string): FetchState<T> {
+  // The generic 'T' is accessible anywhere inside this function body aswell as in the fn signature!
+  const [state, setState] = useState<FetchState<T>>({
+    data: null,
+    loading: true,
+    error: null,
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    setState({ data: null, loading: true, error: null });
+
+    fetch(url)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        return response.json() as Promise<T>; // Directing the response to match T
+      })
+      .then((data) => {
+        if (isMounted) {
+          setState({ data: data, loading: false, error: null });
+        }
+      })
+      .catch((error) => {
+        if (isMounted) {
+          setState({ data: null, loading: false, error: error.message });
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [url]);
+
+  return state;
+
+  // Usage Example:
+  interface User { id: number; name: string; }
+  const { data, loading, error } = useFetch<User[]>("https://example.com");
+
+}
+```
+  Here is how TypeScript processes the scope under the hood:
+  - The Hand-off: The caller passes User[] into <T>.
+  - The Signature: TypeScript updates the signature mentally to: useFetch(url: string): FetchState<User[]>
+  - The Function Body: Because T is scoped to the whole block, TypeScript looks inside the function and substitutes T with User[] everywhere:
+    - useState<FetchState<T>> becomes useState<FetchState<User[]>>
+    - The response.json() as Promise<T> statement becomes Promise<User[]>
+    - When setState updates data, TypeScript ensures the incoming data strictly matches the User[] structure.
+
 ---
 
 ## 9. Ref Forwarding (`React.forwardRef`)
