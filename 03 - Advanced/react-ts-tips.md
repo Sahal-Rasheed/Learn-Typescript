@@ -52,6 +52,7 @@ type ButtonPropsType = {
 * **Component Libraries**: **Always use `interfaces`**. Interfaces support declaration merging and allow other developers to extend them using the `extends` keyword.
 
 ### Core Prop Patterns
+* **React.FC**: Avoid `React.FC` because it implicitly handles children unpredictably across React versions and complicates generic types.
 * **String Unions**: Use string union types to restrict options and provide rich autocompletion:
   ```typescript
   role: "admin" | "user" | "guest"
@@ -82,30 +83,49 @@ interface CustomButtonProps extends React.ComponentPropsWithoutRef<'button'> {
   variant: 'primary' | 'secondary';
 }
 
-export const CustomButton = ({ variant, ...props }: CustomButtonProps) => {
+export const CustomButton = ({ variant = 'primary', children, ...props }: CustomButtonProps) => {
   return (
-    <button className={`btn-${variant}`} {...props} />
+    <button className={`btn-${variant}`} {...props} >
+      {children}
+    </button>
   );
 };
+
+// Usage: Native attributes like 'type' and 'onClick' work out of the box
+<CustomButton type="submit" variant="primary" onClick={() => alert('Clicked')}>
+  Save Changes
+</CustomButton>
 ```
-* **How it works**: By extending `ComponentPropsWithoutRef<'button'>`, your component inherits every native button attribute (such as `onClick`, `disabled`, or `type`). Using the rest operator (`...props`) lets you spread those native attributes directly onto the HTML element, maintaining complete type safety.
+* **How it works**: By extending `ComponentPropsWithoutRef<'button'>`, your component inherits every native button attribute (such as `onClick`, `disabled`, or `type`, `children`). Using the rest operator (`...props`) lets you spread those native attributes directly onto the HTML element, maintaining complete type safety.
 
 ---
 
-## 4. Typing the `children` Prop
+## 4. Typing the `children` Prop - (`React.ReactNode` vs `React.ReactElement`)
 When components act as visual wrappers or providers, they must accept a `children` prop.
 
-### The Standard: `React.ReactNode`
-The standard type to use is **`React.ReactNode`**:
+### The Standard:
+The standard type to use is **`React.ReactNode`** over `React.ReactElement` or `JSX.Element`.
 
 ```typescript
 interface CardProps {
-  children: React.ReactNode;
+  // Accepts text, icons, multiple elements
+  children: React.ReactNode; 
+  // Strict: accepts ONLY a single valid JSX element (e.g., <Icon />)
+  headerIcon: React.ReactElement; 
+}
+
+export function Card({ children, headerIcon }: CardProps) {
+  return (
+    <div>
+      <header>{headerIcon}</header>
+
+      <main>{children}</main>
+    </div>
+  );
 }
 ```
 * **Why it's superior**: `React.ReactNode` accepts *anything* React can natively render—including strings, numbers, single elements, portals, nested components, or arrays of components.
-* **Avoid `JSX.Element`**: `JSX.Element` is extremely strict and only accepts a single, instantiated JSX component. It will throw compiler errors if you attempt to pass a string or a list of elements.
-
+* **Avoid `JSX.Element` or `React.ReactElement`**: `JSX.Element` or `React.ReactElement` is extremely strict and only accepts a single, instantiated JSX component. It will throw compiler errors if you attempt to pass a string or a list of elements.
 ---
 
 ## 5. Typing the `Event Handlers`
@@ -191,7 +211,8 @@ import React from 'react';
 interface IconButtonProps {
   label: string;
   // Enforces that the component passed accepts an optional className
-  icon: React.ComponentType<{ className?: string }>; 
+  icon: React.ComponentType<{ className?: string }>;
+  // Can also use React.ReactElement for the same
 }
 
 export const IconButton = ({ label, icon: Icon }: IconButtonProps) => {
@@ -271,6 +292,13 @@ export const Table = <T extends any>({ data, onRowClick }: TableProps<T>) => {
     </table>
   );
 };
+
+// Usage:
+const users = [
+  { id: 1, name: 'Alice' },
+  { id: 2, name: 'Bob' },
+];
+<Table data={users} onRowClick={(user) => console.log(user.name)} />;
 ```
 Whenever this component is used, TypeScript automatically infers the shape of `T` based on the data array, providing full autocompletion inside `onRowClick`.
 
@@ -302,6 +330,27 @@ Whenever this component is used, TypeScript automatically infers the shape of `T
 ### B. `useRef`
 The behavior of `useRef` shifts completely depending on your initial default value.
 
+```typeScript
+export function RefDemo() {
+  // 1. DOM Ref: Must provide exact HTML element type and initialize with null
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // 2. Mutable Value Ref: Initialized with initial value directly
+  const timerRef = useRef<number>(0);
+
+  useEffect(() => {
+    // Read-only DOM ref requires optional chaining or null check
+    inputRef.current?.focus();
+
+    // Mutable ref can be directly assigned
+    timerRef.current = window.setInterval(() => {}, 1000);
+    return () => clearInterval(timerRef.current);
+  }, []);
+
+  return <input ref={inputRef} />;
+}
+```
+
 1. **Standard Values (Mutable container)**:
    ```typescript
    const countRef = useRef<number>(); // Mutable current value: number | undefined
@@ -316,8 +365,34 @@ The behavior of `useRef` shifts completely depending on your initial default val
 
 ---
 
-### C. `useContext` (The Provider Wrapper Pattern)
-By default, creating context requires a default value, which usually results in initializing with `null`:
+### C. `useReducer`
+Use Discriminated Unions for actions to get full autocomplete and strict type safety inside reducer switch statements.
+
+```typescript
+type State = { count: number; text: string };
+
+type Action =
+  | { type: 'INCREMENT'; payload: number }
+  | { type: 'DECREMENT'; payload: number }
+  | { type: 'SET_TEXT'; payload: string };
+
+function counterReducer(state: State, action: Action): State {
+  switch (action.type) {
+    case 'INCREMENT':
+      return { ...state, count: state.count + action.payload };
+    case 'DECREMENT':
+      return { ...state, count: state.count - action.payload };
+    case 'SET_TEXT':
+      return { ...state, text: action.payload };
+  }
+}
+```
+
+---
+
+### D. `useContext` (The Provider Wrapper Pattern)
+Always initialize context with `null` if a default value cannot be provided at creation time, then throw a custom hook error to enforce safe consumption.
+
 ```typescript
 const UserContext = React.createContext<User | null>(null);
 ```
@@ -327,15 +402,45 @@ This forces you to write `if (user === null)` checks in every single component t
 Instead, export a custom hook that checks for `null` in one place and throws a clear error if the component is outside its Provider:
 
 ```typescript
-import { useContext } from 'react';
+import { createContext, useContext, useState, ReactNode } from 'react';
 
-export const useUser = () => {
-  const context = useContext(UserContext);
-  if (context === null) {
-    throw new Error("useUser must be used within a UserProvider");
+interface AuthContextType {
+  user: string | null;
+  login: (name: string) => void;
+}
+
+const AuthContext = createContext<AuthContextType | null>(null);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<string | null>(null);
+  const login = (name: string) => setUser(name);
+
+  return <AuthContext.Provider value={{ user, login }}>{children}</AuthContext.Provider>;
+}
+
+// Custom hook guarantees non-null context context execution
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
   }
-  return context; // Guaranteed to be 'User' type (not null)
-};
+  return context; // Context type is AuthContextType (null is stripped)
+}
+```
+
+---
+
+### E. `useMemo` & `useCallback`
+Type inference handles returns accurately. Type callback parameters inline directly.
+
+```typescript
+// Inferred as number
+const doubledCount = useMemo(() => count * 2, [count]);
+
+// Inferred as (id: string) => void
+const handleDelete = useCallback((id: string) => {
+  apiDelete(id);
+}, []);
 ```
 
 ---
