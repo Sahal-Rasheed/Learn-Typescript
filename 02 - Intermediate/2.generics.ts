@@ -53,6 +53,7 @@ console.log(adminValue); // Output: { firstName: 'Bob', role: 'Admin' }
 // Note:
 // 1. With generics, we can create a single function that can handle different types of data (UserDetailss and AdminDetailss in this case) without the need for function overloading or union types. This makes the code more concise and easier to maintain.
 // 2. The return value `userValue` and `adminValue` will be of the same type as the input parameter, thus we can access the properties by using dot notation without any type errors. For example, we can access `userValue.name` and `adminValue.firstName` without any issues.
+// 3. Scope of generics in functions: When a generic type parameter (like <T>) is declared on a function, its scope covers the entire function block { ... }, not just the parameters and the return statement.
 
 
 // Example 2: Generic interface
